@@ -21,3 +21,6 @@ anyhow = "1.0"
 thiserror = "1.0"
 memchr = "2.7"
 ahash = "0.8"
+
+[dev-dependencies]
+rand = "0.8"

@@ -1,5 +1,11 @@
 use crate::model::{DirectedGraph, NodeIndex};
 
+struct TarjanFrame {
+    node: NodeIndex,
+    neighbor_idx: usize,
+    visited: bool,
+}
+
 pub struct TarjanSCC;
 
 impl TarjanSCC {
@@ -20,61 +26,71 @@ impl TarjanSCC {
         let mut stack = Vec::with_capacity(n);
         let mut sccs = Vec::new();
 
-        for v in 0..n {
-            if indices[v].is_none() {
-                Self::strongconnect(
-                    graph,
-                    v,
-                    &mut index,
-                    &mut indices,
-                    &mut lowlink,
-                    &mut on_stack,
-                    &mut stack,
-                    &mut sccs,
-                );
+        let mut call_stack: Vec<TarjanFrame> = Vec::with_capacity(n);
+
+        for start_v in 0..n {
+            if indices[start_v].is_some() {
+                continue;
+            }
+
+            call_stack.push(TarjanFrame {
+                node: start_v,
+                neighbor_idx: 0,
+                visited: false,
+            });
+
+            while let Some(frame) = call_stack.last_mut() {
+                let v = frame.node;
+
+                if !frame.visited {
+                    frame.visited = true;
+                    indices[v] = Some(index);
+                    lowlink[v] = index;
+                    index += 1;
+                    stack.push(v);
+                    on_stack[v] = true;
+                }
+
+                let neighbors = &graph.adjacency[v];
+
+                if frame.neighbor_idx < neighbors.len() {
+                    let w = neighbors[frame.neighbor_idx];
+                    frame.neighbor_idx += 1;
+
+                    if indices[w].is_none() {
+                        call_stack.push(TarjanFrame {
+                            node: w,
+                            neighbor_idx: 0,
+                            visited: false,
+                        });
+                    } else if on_stack[w] {
+                        lowlink[v] = lowlink[v].min(indices[w].unwrap());
+                    }
+                } else {
+                    if lowlink[v] == indices[v].unwrap() {
+                        let mut scc = Vec::new();
+                        loop {
+                            let w = stack.pop().unwrap();
+                            on_stack[w] = false;
+                            scc.push(w);
+                            if w == v {
+                                break;
+                            }
+                        }
+                        sccs.push(scc);
+                    }
+
+                    call_stack.pop();
+
+                    if let Some(parent_frame) = call_stack.last_mut() {
+                        let parent_v = parent_frame.node;
+                        lowlink[parent_v] = lowlink[parent_v].min(lowlink[v]);
+                    }
+                }
             }
         }
 
         sccs
-    }
-
-    fn strongconnect(
-        graph: &DirectedGraph<'_>,
-        v: NodeIndex,
-        index: &mut usize,
-        indices: &mut [Option<usize>],
-        lowlink: &mut [usize],
-        on_stack: &mut [bool],
-        stack: &mut Vec<NodeIndex>,
-        sccs: &mut Vec<Vec<NodeIndex>>,
-    ) {
-        indices[v] = Some(*index);
-        lowlink[v] = *index;
-        *index += 1;
-        stack.push(v);
-        on_stack[v] = true;
-
-        for &w in &graph.adjacency[v] {
-            if indices[w].is_none() {
-                Self::strongconnect(graph, w, index, indices, lowlink, on_stack, stack, sccs);
-                lowlink[v] = lowlink[v].min(lowlink[w]);
-            } else if on_stack[w] {
-                lowlink[v] = lowlink[v].min(indices[w].unwrap());
-            }
-        }
-
-        if lowlink[v] == indices[v].unwrap() {
-            let mut scc = Vec::new();
-            loop {
-                let w = stack.pop().unwrap();
-                on_stack[w] = false;
-                scc.push(w);
-                if w == v {
-                    break;
-                }
-            }
-            sccs.push(scc);
-        }
     }
 
     pub fn has_cycle(graph: &DirectedGraph<'_>) -> bool {
@@ -114,44 +130,61 @@ impl KosarajuSCC {
         let mut visited = vec![false; n];
         let mut order = Vec::with_capacity(n);
 
-        for v in 0..n {
-            if !visited[v] {
-                Self::dfs1(graph, v, &mut visited, &mut order);
+        for start_v in 0..n {
+            if visited[start_v] {
+                continue;
+            }
+
+            let mut stack = vec![(start_v, false)];
+
+            while let Some((v, processed)) = stack.pop() {
+                if processed {
+                    order.push(v);
+                    continue;
+                }
+
+                if visited[v] {
+                    continue;
+                }
+                visited[v] = true;
+
+                stack.push((v, true));
+
+                for &u in graph.adjacency[v].iter().rev() {
+                    if !visited[u] {
+                        stack.push((u, false));
+                    }
+                }
             }
         }
 
         let mut visited = vec![false; n];
         let mut sccs = Vec::new();
 
-        for &v in order.iter().rev() {
-            if !visited[v] {
-                let mut scc = Vec::new();
-                Self::dfs2(graph, v, &mut visited, &mut scc);
-                sccs.push(scc);
+        for &start_v in order.iter().rev() {
+            if visited[start_v] {
+                continue;
             }
+
+            let mut scc = Vec::new();
+            let mut stack = vec![start_v];
+            visited[start_v] = true;
+
+            while let Some(v) = stack.pop() {
+                scc.push(v);
+
+                for &u in &graph.reverse_adjacency[v] {
+                    if !visited[u] {
+                        visited[u] = true;
+                        stack.push(u);
+                    }
+                }
+            }
+
+            sccs.push(scc);
         }
 
         sccs
-    }
-
-    fn dfs1(graph: &DirectedGraph<'_>, v: NodeIndex, visited: &mut [bool], order: &mut Vec<NodeIndex>) {
-        visited[v] = true;
-        for &u in &graph.adjacency[v] {
-            if !visited[u] {
-                Self::dfs1(graph, u, visited, order);
-            }
-        }
-        order.push(v);
-    }
-
-    fn dfs2(graph: &DirectedGraph<'_>, v: NodeIndex, visited: &mut [bool], scc: &mut Vec<NodeIndex>) {
-        visited[v] = true;
-        scc.push(v);
-        for &u in &graph.reverse_adjacency[v] {
-            if !visited[u] {
-                Self::dfs2(graph, u, visited, scc);
-            }
-        }
     }
 }
 
