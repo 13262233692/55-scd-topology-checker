@@ -10,7 +10,7 @@ mod graph;
 mod validator;
 
 use parser::SCDParser;
-use graph::{GraphBuilder, TopologyAnalyzer, TarjanSCC};
+use graph::{GraphBuilder, TopologyAnalyzer, TarjanSCC, TimingAnalyzer};
 use validator::IsolationValidator;
 
 #[derive(Parser, Debug)]
@@ -32,6 +32,14 @@ struct Cli {
     /// 执行安全隔离校验
     #[arg(short = 'c', long = "check", default_value_t = true)]
     check: bool,
+
+    /// 执行时序延迟分析
+    #[arg(short = 't', long = "timing", default_value_t = true)]
+    timing: bool,
+
+    /// 时序安全阈值（毫秒）
+    #[arg(long = "threshold-ms", default_value_t = 8)]
+    threshold_ms: u64,
 
     /// 输出 Graphviz DOT 格式图
     #[arg(short = 'g', long = "graphviz")]
@@ -56,7 +64,7 @@ fn main() -> Result<()> {
 
     let start = Instant::now();
 
-    println!("[1/4] 正在解析 SCD 配置文件...");
+    println!("[1/5] 正在解析 SCD 配置文件...");
     println!("  文件路径: {:?}", cli.input);
 
     let parse_start = Instant::now();
@@ -93,7 +101,7 @@ fn main() -> Result<()> {
     println!("    - SV 订阅: {}", total_sv_subs);
     println!();
 
-    println!("[2/4] 正在构建有向图拓扑模型...");
+    println!("[2/5] 正在构建有向图拓扑模型...");
     let graph_start = Instant::now();
 
     let graph = if cli.multilayer {
@@ -108,7 +116,7 @@ fn main() -> Result<()> {
     println!("    - 边数: {}", graph.edge_count());
     println!();
 
-    println!("[3/4] 正在分析强连通分量...");
+    println!("[3/5] 正在分析强连通分量...");
     let scc_start = Instant::now();
     let sccs = TarjanSCC::compute(&graph);
     let scc_duration = scc_start.elapsed();
@@ -123,7 +131,7 @@ fn main() -> Result<()> {
     }
 
     if cli.check {
-        println!("[4/4] 正在执行安全隔离规范校验...");
+        println!("[4/5] 正在执行安全隔离规范校验...");
         let check_start = Instant::now();
 
         let mut validator = IsolationValidator::new();
@@ -136,7 +144,26 @@ fn main() -> Result<()> {
 
         validator.print_report();
     } else {
-        println!("[4/4] 跳过安全隔离校验");
+        println!("[4/5] 跳过安全隔离校验");
+        println!();
+    }
+
+    if cli.timing {
+        println!("[5/5] 正在执行继电保护时序动力学分析...");
+        let timing_start = Instant::now();
+
+        let timing_result = TimingAnalyzer::analyze(&graph, cli.threshold_ms);
+        let timing_duration = timing_start.elapsed();
+
+        println!("  ✓ 时序分析完成，耗时: {:.2?}", timing_duration);
+        println!("    - 保护触发端: {}", timing_result.protection_triggers.len());
+        println!("    - 断路器终端: {}", timing_result.breaker_terminals.len());
+        println!("    - 有效路径数: {}", timing_result.all_paths.len());
+        println!("    - 时序违规数: {}", timing_result.violations.len());
+
+        TimingAnalyzer::print_report(&timing_result);
+    } else {
+        println!("[5/5] 跳过时序延迟分析");
         println!();
     }
 

@@ -7,6 +7,90 @@ pub enum ServiceType {
     MMS,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct DelayProfile {
+    pub internal_processing_us: u64,
+    pub bus_forwarding_us: u64,
+    pub switch_backplane_us: u64,
+    pub network_propagation_us: u64,
+}
+
+impl Default for DelayProfile {
+    fn default() -> Self {
+        Self {
+            internal_processing_us: 200,
+            bus_forwarding_us: 50,
+            switch_backplane_us: 100,
+            network_propagation_us: 50,
+        }
+    }
+}
+
+impl DelayProfile {
+    pub fn protection_device() -> Self {
+        Self {
+            internal_processing_us: 300,
+            bus_forwarding_us: 80,
+            switch_backplane_us: 100,
+            network_propagation_us: 50,
+        }
+    }
+
+    pub fn merging_unit() -> Self {
+        Self {
+            internal_processing_us: 150,
+            bus_forwarding_us: 40,
+            switch_backplane_us: 100,
+            network_propagation_us: 50,
+        }
+    }
+
+    pub fn bay_control() -> Self {
+        Self {
+            internal_processing_us: 250,
+            bus_forwarding_us: 60,
+            switch_backplane_us: 100,
+            network_propagation_us: 50,
+        }
+    }
+
+    pub fn circuit_breaker() -> Self {
+        Self {
+            internal_processing_us: 500,
+            bus_forwarding_us: 100,
+            switch_backplane_us: 100,
+            network_propagation_us: 50,
+        }
+    }
+
+    pub fn switch_node() -> Self {
+        Self {
+            internal_processing_us: 0,
+            bus_forwarding_us: 0,
+            switch_backplane_us: 150,
+            network_propagation_us: 50,
+        }
+    }
+
+    pub fn total_us(&self) -> u64 {
+        self.internal_processing_us
+            + self.bus_forwarding_us
+            + self.switch_backplane_us
+            + self.network_propagation_us
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IEDRole {
+    ProtectionRelay,
+    MergingUnit,
+    BayControlUnit,
+    CircuitBreaker,
+    MonitoringDevice,
+    Switch,
+    Unknown,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VirtualTerminal<'a> {
     pub ied_name: &'a str,
@@ -88,6 +172,36 @@ pub struct IsolationViolation {
     pub severity: ViolationSeverity,
     pub involved_nodes: Vec<String>,
     pub violation_type: ViolationType,
+}
+
+#[derive(Debug, Clone)]
+pub struct TimingPath {
+    pub nodes: Vec<String>,
+    pub total_delay_us: u64,
+    pub per_node_delays: Vec<(String, DelayProfile, u64)>,
+    pub is_critical: bool,
+    pub exceeds_threshold: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TimingAnalysisResult {
+    pub threshold_ms: u64,
+    pub topological_order: Vec<usize>,
+    pub node_arrival_times: Vec<u64>,
+    pub node_delay_profiles: Vec<DelayProfile>,
+    pub critical_paths: Vec<TimingPath>,
+    pub all_paths: Vec<TimingPath>,
+    pub protection_triggers: Vec<usize>,
+    pub breaker_terminals: Vec<usize>,
+    pub violations: Vec<TimingViolation>,
+    pub has_cycles: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct TimingViolation {
+    pub path: TimingPath,
+    pub excess_us: u64,
+    pub severity: ViolationSeverity,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
