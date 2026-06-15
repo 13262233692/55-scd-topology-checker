@@ -1,0 +1,23 @@
+[package]
+name = "scd-topology-checker"
+version = "0.1.0"
+edition = "2024"
+authors = ["SCD Topology Team"]
+description = "超高性能变电站配置文件(SCD)语义拓扑校验工具"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[dependencies]
+quick-xml = { version = "0.36", features = ["encoding"] }
+rayon = "1.10"
+hashbrown = "0.15"
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+thiserror = "1.0"
+memchr = "2.7"
+ahash = "0.8"
